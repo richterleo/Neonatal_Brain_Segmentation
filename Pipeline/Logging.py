@@ -153,6 +153,22 @@ class resultsLogger:
             self.hyperparams["kernels"] = kernels
             self.hyperparams["strides"] = strides
 
+    def log_tcs(self, metric_batch):
+        '''Logs dice scores for each category during training.'''
+
+        for i, cat in enumerate(resultsLogger.categories):
+            metric = metric_batch[i].item()
+            self.results[cat].append(metric)
+    
+    def log_analysis(self, loss, image_id, subj_age, step, epoch):
+        '''Logs scores for error analysis'''
+        
+        self.analysis["loss"].append(loss.item())
+        self.analysis["image_id"].append(image_id)
+        self.analysis["subj_age"].append(subj_age)
+        self.analysis["step"].append(step)
+        self.analysis["epoch"].append(epoch)
+
     def save_info(self):
         '''Save down info dicts as csv files'''
 
@@ -184,14 +200,12 @@ class resultsLogger:
 
 
 if __name__ == "__main__":
-    results = resultsLogger('baseline', "only for testing")
-    results.create_result_folder()
-    results.update_hyperparams(roi_size = [256, 256, 256], slicing_mode="random", selection_mode="random")
-    results.stop_clock()
-    results.save_info()
+    resultlogger = resultsLogger('baseline', "only for testing")
+    resultlogger.create_result_folder()
+    resultlogger.update_hyperparams(roi_size = [256, 256, 256], slicing_mode="random", selection_mode="random")
+    resultlogger.stop_clock()
+    resultlogger.save_info()
 
-    for i in range(1,11):
-        print(i)
 
 
             

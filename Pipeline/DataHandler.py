@@ -36,6 +36,8 @@ class DataCollector:
         assert len(self.t1_list) == len(self.t2_list) == len(self.label_list) == len(self.meta_data_list), "number of train and label files does not align"
 
         self.meta_data_list_dicts = self.read_meta_data()
+        self.data_dict = [{"t1_image": t1_img, "t2_image": t2_img, "label": label, "meta_data": meta_data} 
+                        for t1_img, t2_img, label, meta_data in zip(self.t1_list, self.t2_list, self.label_list, self.meta_data_list_dicts)]
     
     def read_meta_data(self):
         '''Read json encoded meta data into dicts
@@ -55,3 +57,4 @@ class DataCollector:
                 print(f"Skipping {meta_file} because of broken encoding")
 
         return meta_data_list_dicts
+

@@ -70,33 +70,6 @@ set_determinism(seed=resultlogger.meta_info["random_seed"])
 # load data into dicts
 datacollector = DataCollector(resultlogger.root_dir, resultlogger.result_dir, resultlogger.hyperparams["hide_labels"])
 
-# Create list of files
-
-
-for meta_file in meta_data_list:
-  try: 
-    with open(meta_file, 'r') as f:
-      file_name = meta_file.split('/')[-1]
-      id = file_name.split('_meta_data.json')[0]
-      meta_data = json.load(f)
-      meta_data["id"] = id
-      meta_data_list_dicts.append(meta_data)
-  except json.JSONDecodeError:
-    print(f"Skipping {meta_file} because of broken encoding")
-
-# Create basic training data dict
-data_dict = [{"t1_image": t1_image, "t2_image": t2_image, "label": label, "meta_data": meta_data} for t1_image, t2_image, label, meta_data in zip(t1_list, t2_list, label_list, meta_data_list_dicts)]
-
-assert len(t1_list) == len(t2_list) == len(label_list) == len(meta_data_list_dicts)
-
-""" Create split into younger and older age group """
-
-old_neonates = []
-young_neonates = []
-scan_ages = [subj["meta_data"]["scan_age"] for subj in data_dict]
-median_age = np.median(scan_ages)
-avg_age = np.mean(scan_ages)
-print(f"Median Scan Age is {median_age} and Average Scan Age is {avg_age}.")
 
 age_bins = np.linspace(np.min(scan_ages), np.max(scan_ages), 10)              
 age_df = pd.DataFrame(data=scan_ages, columns=["scan_ages"])
@@ -105,36 +78,9 @@ age_df["bucket"] = pd.cut(age_df.scan_ages, age_bins)
 # print(np.histogram(scan_ages, age_bins))
 # for the small dataset: [ 1,  0,  4, 10, 16, 14, 40, 35, 22] --> use the 6th bucket as cutoff
 
-young_neonates = [subj for subj in data_dict if subj['meta_data']['scan_age'] < age_bins[5]]
-old_neonates = [subj for subj in data_dict if subj['meta_data']['scan_age'] > age_bins[6]]
-print(f"There are {len(young_neonates)} young neonates and {len(old_neonates)} old neonates after the split."
-      f"\nAge group: {age_group}"
-      f"\nYoung: under {age_bins[5]}, old: over {age_bins[6]}")
-
-if age_group == "young":
-    data_dict = young_neonates
-elif age_group == "old":
-    data_dict == old_neonates
 
 """ Age Analysis"""
 
-#What is the age distribution at scan time?
-# scan_age_list = [item["meta_data"]["scan_age"] for item in data_dict]
-
-# plt.title('Histogram of Scan Ages')
-# plt.xlabel('Age at Scan Time')
-# plt.ylabel('Frequency')
-# plt.hist(scan_age_list, facecolor='mediumaquamarine')
-# plt.grid(True)
-# plt.savefig("Scan_age_distribution.png", bbox_inches='tight')
-
-# plt.title('Histogram of Birth Ages')
-# plt.xlabel('Age at Scan Time')
-# plt.ylabel('Frequency')
-# plt.hist(scan_age_list, facecolor='peru')
-# plt.grid(True)
-# plt.savefig("Birth_age_distribution.png", bbox_inches='tight')
-# plt.show()
 
 """ Define Transformations"""
 
@@ -221,12 +167,10 @@ train_indices, val_indices, test_indices, train_dict, val_dict, test_dict = crea
 train_ds = Dataset(train_dict, transform=train_transform)
 val_ds = Dataset(val_dict, transform=train_transform)
 
-hyperparam_dict["size_training_set"] = len(train_ds)
-hyperparam_dict["size_val_set"] = len(val_ds)
-
 train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
 val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=True)
 
+resultlogger.update_hyperparams(size_training_set = len(train_ds), size_val_set = len(val_ds)
 print(f"We have {len(train_ds)} training images and {len(val_ds)} val images")
 
 """Creating the Model"""
@@ -259,15 +203,15 @@ post_trans = Compose(
     [EnsureType(), Activations(sigmoid=True), AsDiscrete(threshold_values=True)]
 )
 
-hyperparam_dict["network_architecture"] = type(model).__name__
-hyperparam_dict["loss_function"] = type(loss_function).__name__
-hyperparam_dict["in_channels"] = str(model.in_channels)
-hyperparam_dict["kernel_size"] = str(model.kernel_size)
-hyperparam_dict["upsample_kernel_size"] = str(model.upsample_kernel_size)
+resultlogger.update_hyperparams(network_architecture = type(model).__name__, 
+                                loss_function = type(loss_function).__name__,
+                                in_channels = str(model.in_channels),
+                                kernel_size = str(model.kernel_size),
+                                upsample_kernel_size = str(model.upsample_kernel_size)
 
 """ Training Loop"""
 
-training_start_time = round(time.time()) #use for saving to different model
+resultlogger.restart_clock()
 
 val_interval = 1
 best_metric = -1
@@ -341,13 +285,11 @@ for epoch in range(max_epochs):
             f", image_ids: {image_id}"
             f", subject ages: {subj_age}"
         )
-        analysis_dict["loss"].append(loss.item())
-        analysis_dict["image_id"].append(image_id)
-        analysis_dict["subj_age"].append(subj_age)
-        analysis_dict["step"].append(step)
-        analysis_dict["epoch"].append(epoch)
+
+        resultlogger.log_analysis(loss.item(), image_id, subj_age, step, epoch)
+
     epoch_loss /= step
-    results_dict["epoch_loss"].append(epoch_loss)
+    resultlogger.results["epoch_loss"].append(epoch_loss)
 
     scheduler.step()    
     print(f"epoch {epoch + 1} average loss: {epoch_loss}")
@@ -369,31 +311,12 @@ for epoch in range(max_epochs):
                 dice_metric_batch(y_pred=val_outputs, y=val_labels)
 
             metric = dice_metric.aggregate().item()
-            results_dict["mean_dice"].append(metric)
+            resultlogger.results["mean_dice"].append(metric)
             metric_batch = dice_metric_batch.aggregate()
 
-            metric0 = metric_batch[0].item()
-            results_dict["dice_BG"].append(metric0)
-            metric1 = metric_batch[1].item()
-            results_dict["dice_CSF"].append(metric1)
-            metric2 = metric_batch[2].item()
-            results_dict["dice_cGM"].append(metric2)
-            metric3 = metric_batch[3].item()
-            results_dict["dice_WM"].append(metric3)
-            metric4 = metric_batch[4].item()
-            results_dict["dice_bg"].append(metric4)
-            metric5 = metric_batch[5].item()
-            results_dict["dice_Ventricles"].append(metric5)
-            metric6 = metric_batch[6].item()
-            results_dict["dice_Cerebellum"].append(metric6)
-            metric7 = metric_batch[7].item()
-            results_dict["dice_dGM"].append(metric7)
-            metric8 = metric_batch[8].item()
-            results_dict["dice_Brainstem"].append(metric8)
-            metric9 = metric_batch[9].item()
-            results_dict["dice_Hippocampus"].append(metric9)
+            resultlogger.log_tcs(metric_batch)
 
-            results_dict["mean_dice_crucial_structures"].append(np.mean([metric1, metric2, metric3, metric6, metric7, metric8, metric9]))
+            resultlogger.results["mean_dice_crucial_structures"].append(np.mean([metric1, metric2, metric3, metric6, metric7, metric8, metric9]))
 
             dice_metric.reset()
             dice_metric_batch.reset()
@@ -404,12 +327,12 @@ for epoch in range(max_epochs):
 
                 torch.save(
                     model.state_dict(),
-                    os.path.join(result_dir, "best_metric_model_epoch_" + str(epoch) + ".pth"),
+                    os.path.join(resultlogger.result_dir, "best_metric_model_epoch_" + str(epoch) + ".pth"),
                 )
                 print("saved new best metric model")
             
-            results_dict["best_mean_dice"].append(best_metric)
-            results_dict["best_epoch"].append(best_metric_epoch-1)
+            resultlogger.results["best_mean_dict"].append(best_metric)
+            resultlogger.results["best_epoch"].append(best_metric_epoch-1)
             print(
                 f"current epoch: {epoch + 1} current mean dice: {metric:.4f}"
                 f" background: {metric0:.4f} CSF: {metric1:.4f} cGM: {metric2:.4f}"
@@ -421,15 +344,4 @@ for epoch in range(max_epochs):
             )
 
 
-
-if __name__ == "__main__":
-    resultlogger = resultsLogger('baseline', "only for testing")
-    resultlogger.create_result_folder()
-    
-    set_determinism(seed=resultlogger.meta_info["random_seed"])
-
-
-
-    resultlogger.stop_clock()
-    resultlogger.save_info()
 
