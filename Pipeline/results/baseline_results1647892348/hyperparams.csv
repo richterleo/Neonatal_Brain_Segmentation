@@ -1,0 +1,2 @@
+lr	max_epochs	hide_labels	prop_of_whole	batch_size	age_group	roi_size	pixdim	kernels	strides	slicing_mode	selection_mode
+0.01	20	True	1	2	whole	[256, 256, 256]	[0.5, 0.5, 0.5]	[[3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3]]	[[1, 1, 1], [2, 2, 2], [2, 2, 2], [2, 2, 2], [2, 2, 2], [2, 2, 2], [2, 2, 2]]	random	random

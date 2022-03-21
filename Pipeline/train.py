@@ -1,20 +1,15 @@
-from dHCP_transforms import ConvertToMultiChannelBasedOnDHCPClassesd, HideLabelsd, HideLabels
-from dHCP_utils import create_indices, get_kernels_strides
-import monai
-import pandas as pd
-import re
-import time
-import os
-import shutil
-from collections import Counter, OrderedDict
-import random
-from datetime import datetime
-from typing import Callable, List, Mapping, Optional, Sequence, Tuple, Union
 import json
-
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
+import os
+import pandas as pd
+import random
+import tempfile
+import time
+import torch
+
+from datetime import datetime
 from monai.transforms.inverse import InvertibleTransform
 from monai.apps import DecathlonDataset, download_and_extract, extractall
 from monai.config import print_config, DtypeLike, KeysCollection
@@ -55,25 +50,26 @@ from monai.transforms.transform import Transform
 from monai.utils import set_determinism
 from monai.utils.misc import ensure_tuple_rep
 from monai.networks.layers.factories import Act, Norm
-
+from pathlib import Path
 from torchvision import transforms
+from transforms import ConvertToMultiChannelBasedOnDHCPClassesd, HideLabelsd, HideLabels
+from typing import Callable, List, Mapping, Optional, Sequence, Tuple, Union
+from utils import create_indices, get_kernels_strides
 
-import torch
 
 t0 = round(time.time())
 
-os.environ["MONAI_DATA_DIRECTORY"] = 'dHCP_Training' #set the environment variable
+os.environ["MONAI_DATA_DIRECTORY"] = 'Pipeline' #set the environment variable
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 directory = os.environ.get("MONAI_DATA_DIRECTORY")
 root_dir = tempfile.mkdtemp() if directory is None else directory
-
-print(f"Root dir is {root_dir}.")
 
 """ Save Important Information and Set Hyperparameters """
 
 mode = "quatsch"
 result_dir = root_dir + '/results/' + mode + '_results' + str(t0)
 os.mkdir(result_dir)
+print(f"Results are saved in: {result_dir}.")
 
 # initialize dictionaries to save down meta data and results
 meta_info_dict = {"session_date": str(datetime.today())}
