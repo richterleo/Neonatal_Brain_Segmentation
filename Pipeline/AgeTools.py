@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
 class ageEvaluater:
 
@@ -24,3 +25,13 @@ class ageEvaluater:
         plt.hist(self.scan_age_list, facecolor='mediumaquamarine')
         plt.grid(True)
         plt.savefig(self.result_dir / "Scan_age_distribution.png", bbox_inches='tight')
+
+
+if __name__ == "__main__":
+
+    scan_ages = [1,2,1,6,2,5,1,1,1,3,2,4,6,2,3,4,3]
+    age_bins = np.linspace(np.min(scan_ages), np.max(scan_ages), 10)              
+    age_df = pd.DataFrame(data=scan_ages, columns=["scan_ages"])
+    age_df["bucket"] = pd.cut(age_df.scan_ages, age_bins)
+
+    print(age_df["bucket"])
