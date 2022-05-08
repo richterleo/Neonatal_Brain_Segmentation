@@ -1,27 +1,17 @@
+import numpy as np
 import os
 import pandas as pd
-import tempfile
 import time
 
+from AgeTools import sliding_window_inference_age
+from BaseTypes import ModeIncompatibleError, Logger
 from copy import deepcopy
-from datetime import datetime
-from pathlib import Path
-from utils import get_kernels_strides
+from Hyperparams import categories, tissue_classes, default_hyperparams, slicing_modes, selection_modes
+from monai.inferers import sliding_window_inference
+from Utils import get_kernels_strides
 
-class ModeIncompatibleError(Exception):
-    '''Raised when incompatible mode is chosen
 
-    Attributes:
-        mode (str): training mode
-        message (str): error message
-    '''
-
-    def __init__(self, mode, message= "Invalid mode was selected."):
-        self.mode = mode
-        self.message = message
-        super().__init__(self.message)
-
-class resultsLogger:
+class ResultsLogger(Logger):
     '''Class for logging and saving meta data, hyperparams and metrics during and after training
     
     Attributes:
@@ -36,28 +26,6 @@ class resultsLogger:
         end (Union[None, str]): time at end of training
 
     '''
-    categories = ["BG", "CSF", "cGM", "WM", "bg", "Ventricles", 
-                "Cerebellum", "dGM", "Brainstem", 
-                "Hippocampus"]
-    
-    tissue_classes = ["CSF", "cGM", "WM", "Ventricles", 
-                "Cerebellum", "dGM", "Brainstem", 
-                "Hippocampus"]
-
-    default_hyperparams = {'lr': 1e-2,
-                        'max_epochs': 20,
-                        'hide_labels': False,
-                        'prop_of_whole': 1,
-                        'batch_size': 2,
-                        'age_group': 'whole',
-                        'roi_size': [128, 128, 128],
-                        'pixdim': [0.5, 0.5, 0.5]}
-
-    modes = ['baseline', 'agePrediction', 'labelBudgeting', 'transfer']
-
-    slicing_modes = ['random', 'axial', 'sagittal', 'coronal']
-
-    selection_modes = ['random', 'equidistant']
 
     def __init__(self, mode, session_info='', monai_data_dir='Pipeline', random_seed = 0):
         '''Initializes resultsLogger class.
@@ -69,23 +37,15 @@ class resultsLogger:
             random_seed (int): random seed for training
         
         '''
-        self.check_valid_mode(mode)
-        self.mode = mode
-        self.root_dir = Path(self.get_root_dir(monai_data_dir))
-        self.start = time.time()
+        super().__init__(mode, session_info='', monai_data_dir='Pipeline', random_seed = 0)
         self.result_dir = self.root_dir / 'results' / f"{mode}_results{str(round(self.start))}"
-        self.meta_info = {"session_date": str(datetime.today()), "result_dir": self.result_dir, "mode": self.mode,
-                            "session_info": session_info, "random_seed": random_seed}
+        self.meta_info["result_dir"] = self.result_dir
         self.hyperparams = self.populate_hyperparams()
         self.results = self.populate_results()
         self.analysis = {stat: [] for stat in ["loss", "image_id", "subj_age", "epoch", "step"]}
-        self.end = None
-    
-    @staticmethod
-    def check_valid_mode(mode):
-        '''Checks if mode is valid'''
-        if mode not in resultsLogger.modes:
-                raise ModeIncompatibleError(mode)
+        if mode == 'agePrediction':
+            self.analysis["seg_loss"] = []
+            self.analysis["age_loss"] = []
 
 
     def create_result_folder(self):
@@ -100,30 +60,26 @@ class resultsLogger:
     def populate_results(self):
         '''Create dict to save down metrics during training.'''
         
-        tissue_dict = {tc: [] for tc in resultsLogger.categories}
+        tissue_dict = {cat: [] for cat in categories}
         sum_dict = {stat: [] for stat in ["epoch_loss", "mean_dice", "mean_dice_imp", 
                     "best_mean_dice", "best_epoch"]}
         time_dict = {"training_time": None}
+
+        if self.mode == 'agePrediction':
+            sum_dict["age_epoch_loss"] = []
+            sum_dict["seg_epoch_loss"] = []
 
         return tissue_dict | sum_dict | time_dict
     
     def populate_hyperparams(self):
         '''Create dict to save down hyperparams.'''
 
-        hyperparam_dict = resultsLogger.default_hyperparams
+        hyperparam_dict = default_hyperparams
         kernels, strides = get_kernels_strides(hyperparam_dict["roi_size"], hyperparam_dict["pixdim"])
         hyperparam_dict["kernels"] = kernels
         hyperparam_dict["strides"] = strides
 
         return hyperparam_dict
-
-    def get_root_dir(self, monai_data_dir):
-        '''Sets environment variables'''
-
-        os.environ["MONAI_DATA_DIRECTORY"] = monai_data_dir
-        os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
-        directory = os.environ.get("MONAI_DATA_DIRECTORY")
-        return tempfile.mkdtemp() if directory is None else directory
     
     def update_hyperparams(self, **kwargs):
         '''Overwrites hyperparams manually.'''
@@ -135,13 +91,13 @@ class resultsLogger:
             self.hyperparams[k] = v
         
         if 'selection_mode' in set(kwargs.keys()):
-            if kwargs['selection_mode'] not in resultsLogger.selection_modes:
+            if kwargs['selection_mode'] not in selection_modes:
                 raise ModeIncompatibleError(kwargs['selection_mode'])
             assert 'slicing_mode' in set(kwargs.keys()), "selection mode was given but slicing mode is missing"
             self.hyperparams["hide_labels"] = True
         
         if 'slicing_mode' in set(kwargs.keys()):
-            if kwargs['slicing_mode'] not in resultsLogger.slicing_modes:
+            if kwargs['slicing_mode'] not in slicing_modes:
                 raise ModeIncompatibleError(kwargs['slicing_mode'])
             assert 'selection_mode' in set(kwargs.keys()), 'slicing mode was given but selection mode is missing'
             self.hyperparams["hide_labels"] = True
@@ -153,12 +109,17 @@ class resultsLogger:
             self.hyperparams["kernels"] = kernels
             self.hyperparams["strides"] = strides
 
-    def log_tcs(self, metric_batch):
+    def log_tcs(self, metric, metric_batch):
         '''Logs dice scores for each category during training.'''
+        
+        self.results_dict['mean_dice'].append(metric)
 
-        for i, cat in enumerate(resultsLogger.categories):
-            metric = metric_batch[i].item()
-            self.results[cat].append(metric)
+        for i, cat in enumerate(ResultsLogger.categories):
+            tc_metric = metric_batch[i].item()
+            self.results[cat].append(tc_metric)
+
+        self.results['mean_dice_imp'] = np.mean([self.results[tc] for tc in tissue_classes])
+
     
     def log_analysis(self, loss, image_id, subj_age, step, epoch):
         '''Logs scores for error analysis'''
@@ -168,6 +129,15 @@ class resultsLogger:
         self.analysis["subj_age"].append(subj_age)
         self.analysis["step"].append(step)
         self.analysis["epoch"].append(epoch)
+
+    def log_age_analysis(self, loss, seg_loss, age_loss, image_id, subj_age, step, epoch):
+        '''Logs scores for error analysis with added age prediction'''
+        self.log_analysis(loss, image_id, subj_age, step, epoch)
+        try:
+            self.analysis['seg_loss'].append(seg_loss.item())
+            self.analysis['age_loss'].append(age_loss.item())
+        except KeyError:
+            print(f"Analysis dict not properly defined for age prediction, missing keys")
 
     def save_info(self):
         '''Save down info dicts as csv files'''
@@ -198,9 +168,92 @@ class resultsLogger:
         self.meta_info["duration"] = str(t1-self.start)
 
 
+class InferenceLogger(Logger):
+
+    def __init__(self, mode, model_path, model_size='big', session_info='', monai_data_dir='Pipeline', random_seed = 0):
+        '''Initializes resultsLogger class.
+        
+        Args:
+            mode (str): training mode
+            session_info (str): additional information about current run
+            monai_data_dir (str): environment variable for current directory
+            random_seed (int): random seed for training
+        
+        '''
+        super().__init__(mode, session_info='', monai_data_dir='Pipeline', random_seed = 0)
+        self.result_dir = self.root_dir / 'results' / f"Evaluate_{mode}_results{str(round(self.start))}"
+        self.meta_info["result_dir"] = self.result_dir
+        self.hyperparams = self.populate_hyperparams(model_size)
+        self.results = self.populate_results()
+        self.model_path = model_path
+
+    def populate_results(self):
+        '''Create dict to save down metrics during training.'''
+        
+        tissue_dict = {cat: [] for cat in categories}
+        sum_dict = {stat: [] for stat in ["epoch_loss", "mean_dice", "mean_dice_imp", 
+                    "best_mean_dice", "best_epoch"]}
+        time_dict = {"training_time": None}
+
+        if self.mode == 'agePrediction':
+            sum_dict["age_epoch_loss"] = []
+            sum_dict["seg_epoch_loss"] = []
+
+        return tissue_dict | sum_dict | time_dict
+    
+    def populate_hyperparams(self, model_size):
+        '''Create dict to save down hyperparams.'''
+
+        hyperparam_dict = default_hyperparams
+        if model_size == 'small':
+            hyperparam_dict['roi_size'] = [96, 96, 96]
+            hyperparam_dict['pixdim'] = [0.6, 0.6, 0.6]   
+        kernels, strides = get_kernels_strides(hyperparam_dict["roi_size"], hyperparam_dict["pixdim"])
+        hyperparam_dict["kernels"] = kernels
+        hyperparam_dict["strides"] = strides
+        hyperparam_dict["pretrained_model_path"] = self.model_path
+
+        return hyperparam_dict  
+
+
+    def infer(self, input, model):
+        '''Define sliding window inference function.
+        
+        Args:
+            inputs (array): inputs to evaluate
+            model : model to evaluate
+
+        Returns:
+            inference function
+        '''
+        if self.mode == 'agePrediction':
+
+            def _compute(input):
+                return sliding_window_inference_age(
+                    inputs=input,
+                    roi_size=self.hyperparams['roi_size'],
+                    sw_batch_size=self.hyperparams['batch_size'],
+                    predictor=model,
+                    overlap=0.5)
+
+        else:
+    
+            def _compute(input):
+                return sliding_window_inference(
+                    inputs=input,
+                    roi_size=self.hyperparams['roi_size'],
+                    sw_batch_size=self.hyperparams['batch_size'],
+                    predictor=model,
+                    overlap=0.5,)
+
+        return _compute(input)
+
+
+
+
 
 if __name__ == "__main__":
-    resultlogger = resultsLogger('baseline', "only for testing")
+    resultlogger = ResultsLogger('baseline', "only for testing")
     resultlogger.create_result_folder()
     resultlogger.update_hyperparams(roi_size = [256, 256, 256], slicing_mode="random", selection_mode="random")
     resultlogger.stop_clock()

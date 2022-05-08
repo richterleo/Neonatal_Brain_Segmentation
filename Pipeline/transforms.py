@@ -32,19 +32,24 @@ from monai.transforms import (
     LoadImaged,
     MapTransform,
     NormalizeIntensityd,
-    Orientationd,
     RandFlipd,
     RandScaleIntensityd,
     RandShiftIntensityd,
     RandSpatialCropd,
     Spacingd,
-    ToTensor,
     ToTensord,
     AddChanneld,
     Resized,
     EnsureTyped,
     EnsureType,
     ResizeWithPadOrCropd,
+    ConcatItemsd,
+    DeleteItemsd,
+    Rand3DElasticd,
+    RandGaussianNoised,
+    RandGaussianSmoothd,
+    CropForegroundd,
+    SpatialPadd
 )
 from monai.transforms.transform import Transform
 from monai.utils import set_determinism
@@ -259,3 +264,97 @@ class HideLabels(Transform):
             aux_matrix_reshaped = aux_matrix
 
         return loc, selected_slices, aux_matrix_reshaped[np.newaxis, :,:,:]  # add first dimension
+
+
+visualisation_transform = Compose(
+    [
+        LoadImaged(keys=["t1_image", "t2_image", "label"]), # (217, 290, 290) orig size
+        AddChanneld(keys=["t1_image", "t2_image", "label"]), 
+        ConcatItemsd(keys=["t1_image", "t2_image"], name="image"),
+        DeleteItemsd(keys=["t1_image", "t2_image"]),
+        ToTensord(keys=["image", "label"]),
+    ]
+)
+
+def create_train_val_transform(pixdim, roi_size):
+    train_transform= Compose(
+        [
+            LoadImaged(keys=["t1_image", "t2_image", "label"]), #[217, 290, 290]
+            ConvertToMultiChannelBasedOnDHCPClassesd(keys="label"), #(10, 217, 290, 290)
+            AddChanneld(keys=["t1_image", "t2_image"]), #(2, 217, 290, 290)
+            Spacingd(keys=["t1_image", "t2_image", "label"], pixdim=pixdim, mode=("bilinear", "bilinear", "nearest")),
+            CropForegroundd(keys=["t1_image", "t2_image", "label"], source_key="t2_image", select_fn=lambda x: x>1, margin=0),
+            ConcatItemsd(keys=["t1_image", "t2_image"], name="image"),
+            DeleteItemsd(keys=["t1_image", "t2_image"]),
+            RandSpatialCropd(
+                keys=["image", "label"], roi_size=roi_size, random_size=False, random_center=True
+            ), # [192, 192, 192]
+            SpatialPadd(keys=["image", "label"], spatial_size=roi_size),
+            RandFlipd(keys=["image", "label"], prob=0.1, spatial_axis=0),
+            RandFlipd(keys=["image", "label"], prob=0.1, spatial_axis=1),
+            RandFlipd(keys=["image", "label"], prob=0.1, spatial_axis=2),
+            Rand3DElasticd(
+                keys=["image", "label"],
+                mode=("bilinear", "nearest"),
+                prob=0.24,
+                sigma_range=(5, 8),
+                magnitude_range=(40, 80),
+                translate_range=(20, 20, 20),
+                rotate_range=(np.pi / 36, np.pi / 36, np.pi),
+                scale_range=(0.15, 0.15, 0.15),
+                padding_mode="reflection",
+            ),
+            NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
+            RandGaussianNoised(keys=["image"], std=0.01, prob=0.13),
+            RandGaussianSmoothd(
+                keys=["image"],
+                sigma_x=(0.5, 1.15),
+                sigma_y=(0.5, 1.15),
+                sigma_z=(0.5, 1.15),
+                prob=0.13,
+            ),
+            RandScaleIntensityd(keys="image", factors=0.1, prob=0.24),
+            RandShiftIntensityd(keys="image", offsets=0.1, prob=0.24),
+            EnsureTyped(keys=["image", "label"]),
+        ]
+    )
+
+
+    val_transform = Compose(
+        [
+            LoadImaged(keys=["t1_image", "t2_image", "label"]), #[217, 290, 290]
+            ConvertToMultiChannelBasedOnDHCPClassesd(keys="label"),
+            AddChanneld(keys=["t1_image", "t2_image"]), #(2, 217, 290, 290)
+            Spacingd(keys=["t1_image", "t2_image", "label"], pixdim=pixdim, mode=("bilinear", "bilinear", "nearest")),
+            CropForegroundd(keys=["t1_image", "t2_image", "label"], source_key="t2_image", select_fn=lambda x: x>1, margin=0),
+            ConcatItemsd(keys=["t1_image", "t2_image"], name="image"),
+            DeleteItemsd(keys=["t1_image", "t2_image"]),
+            RandSpatialCropd(
+                keys=["image", "label"], roi_size=roi_size, random_size=False, random_center=True
+            ), 
+            SpatialPadd(keys=["image", "label"], spatial_size=roi_size),
+            NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
+            EnsureTyped(keys=["image", "label"]),
+        
+        ]
+    )
+
+    return train_transform, val_transform 
+
+def create_test_transform(pixdim):
+
+    test_transform= Compose(
+    [
+        LoadImaged(keys=["t1_image", "t2_image", "label"]), #[217, 290, 290]
+        ConvertToMultiChannelBasedOnDHCPClassesd(keys="label"), #(10, 217, 290, 290)
+        AddChanneld(keys=["t1_image", "t2_image"]), #(2, 217, 290, 290)
+        Spacingd(keys=["t1_image", "t2_image", "label"], pixdim=pixdim, mode=("bilinear", "bilinear", "nearest")),
+        NormalizeIntensityd(keys=["t1_image", "t2_image"], nonzero=True, channel_wise=True),
+        ConcatItemsd(keys=["t1_image", "t2_image"], name="image"),
+        DeleteItemsd(keys=["t1_image", "t2_image"]),
+        EnsureTyped(keys=["image", "label"]),
+    ])
+
+    return test_transform
+
+post_trans = Compose([EnsureType(), Activations(sigmoid=True), AsDiscrete(threshold_values=True)])
