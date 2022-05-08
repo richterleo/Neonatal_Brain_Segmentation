@@ -2,17 +2,13 @@ import matplotlib.pyplot as plt
 
 from Hyperparams import categories, colors
 
-class resultPlotter:
+class ResultPlotter:
     '''Class for plotting training results
     
     Attributes:
-<<<<<<< HEAD
-        results (dict[str, list]): training results (loss, dice)
-=======
-        results (dict[str, list]): training results (loss, dice)\
->>>>>>> d0c887d6b67d318c70a21047f38242c3a59b36ab
+        results (Dict[str, List]): training results (loss, dice)
         result_dir (pathlib.Path): path to result directory, newly created for each run
-        mode (str): training mode
+        mode (str): one of four possible training modes ('baseline', 'agePrediction', 'labelBudgeting', 'transfer')
     
     '''
 
@@ -23,7 +19,7 @@ class resultPlotter:
         self.val_interval = val_interval
 
     def plot_epoch_loss_val_dice(self):
-        '''Saves down plot of mean losses and validation dice scores over epochs'''
+        '''Saves down plot of mean losses and validation dice scores over epochs.'''
 
         plt.figure("train", (12, 6))
 
@@ -44,7 +40,7 @@ class resultPlotter:
         plt.savefig(self.result_dir / 'epoch_average_loss.png')
 
     def plot_tissue_dice(self):
-
+        ''' Plot val mean dice per tissue class and save down figure.'''
 
         plt.figure("train", (18, 6))
 
