@@ -4,9 +4,9 @@ import pandas as pd
 import time
 
 from AgeTools import sliding_window_inference_age
-from BaseTypes import ModeIncompatibleError, Logger
+from BaseTypes import ModeIncompatibleError, MissingModeError, Logger
 from copy import deepcopy
-from Hyperparams import categories, tissue_classes, default_hyperparams, slicing_modes, selection_modes
+from Hyperparams import categories, tissue_classes, default_hyperparams, slicing_modes, selection_modes, transfer_strategies
 from monai.inferers import sliding_window_inference
 from Utils import get_kernels_strides
 
@@ -27,7 +27,7 @@ class ResultsLogger(Logger):
 
     '''
 
-    def __init__(self, mode, session_info='', monai_data_dir='Pipeline', random_seed = 0):
+    def __init__(self, mode, slicing_mode = None, selection_mode = None, session_info='', monai_data_dir='Pipeline', random_seed = 0):
         '''Initializes resultsLogger class.
         
         Args:
@@ -46,6 +46,12 @@ class ResultsLogger(Logger):
         if mode == 'agePrediction':
             self.analysis["seg_loss"] = []
             self.analysis["age_loss"] = []
+        elif mode == 'labelBudgeting':
+            if not (slicing_mode and selection_mode):
+                raise MissingModeError()
+            else:
+                self.hyperparams['slicing_mode'] = slicing_mode
+                self.hyperparams['selection_mode'] = selection_mode
 
 
     def create_result_folder(self):
@@ -171,11 +177,14 @@ class ResultsLogger(Logger):
 
 class InferenceLogger(Logger):
 
-    def __init__(self, mode, model_path, model_size='big', session_info='', monai_data_dir='Pipeline', random_seed = 0):
-        '''Initializes resultsLogger class.
+    def __init__(self, mode, model_path=None, transfer_strategy = None, 
+                model_size='big', session_info='', monai_data_dir='Pipeline', random_seed = 0):
+        '''Initializes InferenceLogger class.
         
         Args:
             mode (str): training mode
+            model_path (Union[str, Path]): path to trained model
+            transfer_strategy (str): one of 5 transfer strategies specified in Hyperparams
             session_info (str): additional information about current run
             monai_data_dir (str): environment variable for current directory
             random_seed (int): random seed for training
@@ -187,6 +196,13 @@ class InferenceLogger(Logger):
         self.hyperparams = self.populate_hyperparams(model_size)
         self.results = self.populate_results()
         self.model_path = model_path
+        self.model_size = model_size
+        self.hide_labels = None
+
+        if self.mode == 'transfer':
+            self.check_valid_mode(transfer_strategy, transfer_strategies)
+            self.transfer_strategy = transfer_strategy
+            self.meta_info['transfer_strategy'] = transfer_strategy
 
     def populate_results(self):
         '''Create dict to save down metrics during training.'''
@@ -232,7 +248,7 @@ class InferenceLogger(Logger):
                 return sliding_window_inference_age(
                     inputs=input,
                     roi_size=self.hyperparams['roi_size'],
-                    sw_batch_size=self.hyperparams['batch_size'],
+                    sw_batch_size=1,
                     predictor=model,
                     overlap=0.5)
 
@@ -242,7 +258,7 @@ class InferenceLogger(Logger):
                 return sliding_window_inference(
                     inputs=input,
                     roi_size=self.hyperparams['roi_size'],
-                    sw_batch_size=self.hyperparams['batch_size'],
+                    sw_batch_size=1,
                     predictor=model,
                     overlap=0.5,)
 
@@ -263,8 +279,6 @@ class InferenceLogger(Logger):
 
         self.results['mse_metric'].append(mse_metric.item())
         self.results['mae_metric'].append(mae_metric.item())
-
-
 
 
 

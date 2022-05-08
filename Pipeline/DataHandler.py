@@ -1,9 +1,15 @@
+import csv
 import os
+import random
 import tempfile
 import typing
 
 from BaseTypes import NpDecoder, Collector
+from copy import deepcopy
+from Hyperparams import label_dispersion_factor
 from pathlib import Path
+from monai.data import DataLoader, Dataset
+from Transforms import create_train_val_transform, create_test_transform
 
 class TrainCollector(Collector):
     '''Class for loading data and creating train/val/test and young/old split.
@@ -24,10 +30,11 @@ class TrainCollector(Collector):
         data_dict (List): list of dicts containing T1w, T2w, label and meta data per sample
         val_test_split (float): proportion of images in train set. rest of samples is equally distributed over val and test set
     '''
-    def __init__(self, root_dir, result_dir, hide_labels, val_test_split=0.8, db='dHCP'):
+    def __init__(self, root_dir, result_dir, mode, val_test_split=0.8, db='dHCP'):
         super().__init__(root_dir, result_dir, db)
-        self.hide_labels = hide_labels
-        if hide_labels:
+        self.mode = mode
+        if mode == 'labelBudgeting':
+            # define dir to cache transformed samples
             self.cache_dir = self.result_dir / 'cache_dir'
         self.val_test_split = val_test_split
 
@@ -63,6 +70,45 @@ class TrainCollector(Collector):
 
         return train_data_dict, val_data_dict
 
+    def create_train_val_test_ids(self):
+        '''Creates fixed and random train, val, test indices and saves them down.'''
+
+        assert self.mode in ['baseline', 'agePrediction', 'labelBudgeting'], 'method cannot be used in mode <<transfer>>'
+
+        id_list = [item['meta_data']['id'] for item in self.data_dict]
+        id_list_shuffle = random.shuffle(id_list)
+
+        # balance out total number of slices by decreasing training samples in baseline conditions
+        if self.mode == 'baseline' or self.mode == 'agePrediction':
+            num_samples = int(label_dispersion_factor * len(id_list)) # default value: 30%
+        elif self.mode == 'labelBudgeting':
+            num_samples = len(id_list)
+
+        train_stop = int(num_samples*self.val_test_split)
+        val_stop = int(num_samples*((1-self.val_test_split)/2))
+
+        train_ids = id_list_shuffle[:train_stop]
+        val_ids = id_list_shuffle[train_stop:val_stop]
+        test_ids = id_list_shuffle[val_stop:num_samples]
+
+        id_path = self.root_dir / 'IDs'
+        train_path = id_path / 'train_ids.csv'
+        val_path = id_path / 'val_ids.csv'
+        test_path = id_path / 'test_ids.csv' 
+
+        Path(id_path).mkdir(parents=True, exist_ok=True)
+
+        with open(train_path,'w') as train_file:
+            wr = csv.writer(train_file, dialect='excel')
+            wr.writerow(train_ids)
+
+        with open(val_path,'w') as val_file:
+            wr = csv.writer(val_file, dialect='excel')
+            wr.writerow(val_ids)
+
+        with open(test_path,'w') as test_file:
+            wr = csv.writer(test_file, dialect='excel')
+            wr.writerow(test_ids)
 
     def create_old(self):
         '''Creates dataset made up of old subjects for transfer learning.
@@ -159,6 +205,13 @@ class TestCollector(Collector):
         if not (old_path.is_file() and young_train_path.is_file() and young_test_path.is_file()):
             self.create_old_young_ids()
 
+        with open(young_train_path, 'r') as f:
+            young_train_ids = f.read()
+        young_train_ids = young_train_ids.strip()
+        young_train_id_list = young_train_ids.split(',')
+
+        young_train_data_dict = [item for item in self.data_dict if item['meta_data']['id'] in young_train_id_list]
+
         with open(young_test_path, 'r') as f:
             young_test_ids = f.read()
         young_test_ids = young_test_ids.strip()
@@ -166,7 +219,32 @@ class TestCollector(Collector):
 
         young_test_data_dict = [item for item in self.data_dict if item['meta_data']['id'] in young_test_id_list]
 
-        return young_test_data_dict
+        return young_train_data_dict, young_test_data_dict
+
+
+    def get_loaders(self, pixdim, roi_size, batch_size):
+        
+        if self.mode == 'transfer':
+            train_dict, test_dict = self.create_young()
+
+            train_transform, _ = create_train_val_transform(pixdim, roi_size)
+            test_transform = create_test_transform(pixdim)
+            train_ds = Dataset(train_dict, transform=train_transform)
+            test_ds = Dataset(test_dict, transform=test_transform)
+
+            train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+            test_loader = DataLoader(test_ds, batch_size=1, shuffle=False) # test loader always gets batch_size = 1
+
+            return train_loader, test_loader
+        
+        else:
+            test_dict = self.create_sets()
+            test_transform = create_test_transform(pixdim)
+
+            test_ds = Dataset(test_dict, transform=test_transform)
+            test_loader = DataLoader(test_ds, batch_size=1, shuffle=False)
+
+            return test_loader
 
 if __name__ == '__main__':
     os.environ["MONAI_DATA_DIRECTORY"] = 'Pipeline'

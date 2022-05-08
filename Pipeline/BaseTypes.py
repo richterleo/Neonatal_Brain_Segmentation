@@ -27,6 +27,17 @@ class ModeIncompatibleError(Exception):
         self.message = message
         super().__init__(self.message)
 
+class MissingModeError(Exception):
+    '''Raised when slicing_mode or selection_mode is missing
+
+    Attributes:
+        message (str): error message
+    '''
+
+    def __init__(self,  message= "slicing_mode and selection_mode must be given"):
+        self.message = message
+        super().__init__(self.message)
+
 
 class Logger(ABC):
     '''Abstract base class for ResultLogger and InferenceLogger'''
@@ -34,7 +45,7 @@ class Logger(ABC):
     def __init__(self, mode, session_info='', monai_data_dir='Pipeline', random_seed = 0):
 
         super().__init__()
-        self.check_valid_mode(mode)
+        self.check_valid_mode(mode, modes)
         self.mode = mode
         self.root_dir = Path(self.get_root_dir(monai_data_dir))
         self.start = time.time()
@@ -64,7 +75,7 @@ class Logger(ABC):
         pass
 
     @staticmethod
-    def check_valid_mode(mode):
+    def check_valid_mode(mode, modes):
         '''Checks if mode is valid'''
         if mode not in modes:
                 raise ModeIncompatibleError(mode)
@@ -142,6 +153,7 @@ class Collector(ABC):
         self.t2_dir = self.db_path / 'T2w'
         self.label_dir = self.db_path / 'labels'
         self.meta_data_dir = self.db_path / 'meta_data'
+
         self.t1_list = sorted([os.path.join(self.t1_dir, f) for f in os.listdir(self.t1_dir)])
         self.t2_list = sorted([os.path.join(self.t2_dir, f) for f in os.listdir(self.t2_dir)])
         self.label_list = sorted([os.path.join(self.label_dir, f) for f in os.listdir(self.label_dir)])
@@ -177,13 +189,22 @@ class Collector(ABC):
     def create_sets(self):
         pass
 
-    def create_train_val_test_ids(self):
+    @abstractmethod
+    def create_train_val_test_ids(self, mode):
         '''Creates fixed and random train, val, test indices and saves them down.'''
-        
+
+        assert mode in ['baseline', 'agePrediction', 'labelBudgeting'], 'method cannot be used in mode <<transfer>>'
+
         id_list = [item['meta_data']['id'] for item in self.data_dict]
         id_list_shuffle = random.shuffle(id_list)
-        train_stop = int(len(id_list)*self.val_test_split)
-        val_stop = int(len(id_list)*((1-self.val_test_split)/2))
+
+        if mode == 'baseline' or mode == 'agePrediction':
+            num_samples = int(0.3 * len(id_list))
+        elif mode == 'labelBudgeting':
+            num_samples = int(0.9 * len(id_list))
+
+        train_stop = int(num_samples*self.val_test_split)
+        val_stop = int(num_samples*((1-self.val_test_split)/2))
 
         train_ids = id_list_shuffle[:train_stop]
         val_ids = id_list_shuffle[train_stop:val_stop]

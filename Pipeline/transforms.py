@@ -1,27 +1,8 @@
-import monai
-import pandas as pd
-import re
-import time
-import os
-import shutil
-import tempfile
-import tqdm
-from collections import Counter, OrderedDict
 import random
-from datetime import datetime
-from typing import Callable, List, Mapping, Optional, Sequence, Tuple, Union
-import json
-
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 import numpy as np
-from monai.transforms.inverse import InvertibleTransform
-from monai.apps import DecathlonDataset, download_and_extract, extractall
-from monai.config import print_config, DtypeLike, KeysCollection
-from monai.data import DataLoader, Dataset, decollate_batch, CacheNTransDataset, PersistentDataset
-from monai.losses import DiceLoss
-from monai.metrics import DiceMetric
-from monai.networks.nets import UNet
+
+from Hyperparams import label_dispersion_factor
+from monai.config import KeysCollection
 from monai.transforms import (
     Activations,
     AsChannelFirstd,
@@ -52,12 +33,6 @@ from monai.transforms import (
     SpatialPadd
 )
 from monai.transforms.transform import Transform
-from monai.utils import set_determinism
-from monai.utils.misc import ensure_tuple_rep
-
-from torchvision import transforms
-
-import torch
 
 class ConvertToMultiChannelBasedOnDHCPClassesd(MapTransform):
     """
@@ -93,7 +68,7 @@ class HideLabelsd(MapTransform):
             keys: KeysCollection,
             slicing_mode: str = "random",
             selection_mode: str = "random",
-            proportion: float = 0.67,
+            proportion: float = 1-label_dispersion_factor,
             meta_key_postfix: str = "slice_dict",
             meta_key_postfix_aux: str = "slice_matrix",
             allow_missing_keys: bool = False,
@@ -157,7 +132,7 @@ class HideLabels(Transform):
     """
 
     def __init__(self, slicing_mode: str = "random", selection_mode: str = "random",
-                 proportion: float = 0.7) -> None:
+                 proportion: float = 1-label_dispersion_factor) -> None:
 
         """
         Args:

@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 
+from Hyperparams import categories, colors
+
 class resultPlotter:
     '''Class for plotting training results
     
@@ -9,11 +11,6 @@ class resultPlotter:
         mode (str): training mode
     
     '''
-    categories = ["BG", "CSF", "cGM", "WM", "bg", "Ventricles", "Cerebellum", "dGM", "Brainstem", 
-                "Hippocampus"]
-    
-    colors = ["blue", "brown", "purple", "yellow", "red", "magenta", "indigo", "cornflowerblue",
-            "salmon", "peru"]
 
     def __init__(self, results, result_dir, mode, val_interval):
         self.results = results
@@ -47,13 +44,13 @@ class resultPlotter:
 
         plt.figure("train", (18, 6))
 
-        for i, tc in enumerate(resultPlotter.categories):
+        for i, tc in enumerate(categories):
             plt.subplot(2, 5, i)
             plt.title(f"Val Mean Dice {tc}")
             x = [self.val_interval * (i + 1) for i in range(len(self.results[tc]))]
             y = self.results[tc]
             plt.xlabel("epoch")
-            plt.plot(x, y, color=resultPlotter.colors[i])
+            plt.plot(x, y, color=colors[i])
 
         plt.tight_layout()
         plt.savefig(self.result_dir / 'dice_subplots.png')
