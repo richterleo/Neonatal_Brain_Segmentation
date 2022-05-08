@@ -251,7 +251,6 @@ class InferenceLogger(Logger):
 
 
 
-
 if __name__ == "__main__":
     resultlogger = ResultsLogger('baseline', "only for testing")
     resultlogger.create_result_folder()
