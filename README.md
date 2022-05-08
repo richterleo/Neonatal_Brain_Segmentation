@@ -12,15 +12,12 @@ This repository consists of 4 building blocks:
 
 ## Table of Contents
 
-* [Technologies](#technologies)
 * [Import Data](#importdata)
 * [Run Pipeline](#runpipeline)
 * [Age Prediction](#ageprediction)
 * [Label Budgeting](#labelbudgeting)
 * [Transfer Learning](#transferlearning)
 * [Inference](#inference)
-
-## Technologies
 
 ## Import Data
 
