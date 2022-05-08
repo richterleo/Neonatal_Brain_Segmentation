@@ -53,7 +53,7 @@ and then executing the training pipeline.
 
 ## Label Budgeting
 
-To train a model on partially annotated MRI scans, set the `mode` of the ResultsLogger in `Train.py` to `labelBudgeting`. By default, 30% of the slices of each scan will be annotated and the number of samples will be tripled. 
+To train a model on partially annotated MRI scans, set the `mode` of the ResultsLogger in `Train.py` to `labelBudgeting`. By default, 30% of the slices of each scan will be annotated and the number of samples will be increased accordingly.
 
 ## Transfer Learning
 
