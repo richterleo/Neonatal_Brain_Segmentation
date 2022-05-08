@@ -72,7 +72,7 @@ inferencelogger = InferenceLogger('baseline', model_path, session_info='Test inf
 ```
 and execute `Inference.py`. Results will be saved in a newly created results directory (see also [Run Pipeline](runpipeline)). 
 
-Please also provide the InferenceLogger with the model training mode (i.e. `baseline`, `agePrediction`, `labelBudgeting` or `transfer`). If `transfer` is selected, the inference will be performed on the smaller testset of preterm infants. Additionally, a transfer strategy (`no_fine_tuning`, `fine_tuning`, `deep`, `medium`, `shallow`) must be provided:
+Please also provide the InferenceLogger with the model training mode (i.e. `baseline`, `agePrediction`, `labelBudgeting` or `transfer`). If `transfer` is selected, the inference will be performed on the smaller testset of preterm infants. Additionally, a transfer strategy (`no_fine_tuning`, `fine_tuning`, `deep`, `medium`, `shallow`, `new_model`) must be provided, e.g.:
 
 ```
 model_path = Path('Path/to/model')
