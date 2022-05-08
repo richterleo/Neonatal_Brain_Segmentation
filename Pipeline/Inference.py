@@ -12,7 +12,7 @@ from Utils import set_parameter_requires_grad
 from Transforms import post_trans
 from Train import run
 
-model_path = Path('dHCP_Training/results/Age_Segmentation_Dynunet_results1631399790/best_metric_model_epoch_57.pth')
+model_path = Path('results/Age_Segmentation_Dynunet_results1631399790/best_metric_model_epoch_57.pth')
 inferencelogger = InferenceLogger('baseline', model_path=model_path, session_info='Only for testing') # if transfer, define strategy
 
 set_determinism(seed=inferencelogger.hyperparams['random_seed'])

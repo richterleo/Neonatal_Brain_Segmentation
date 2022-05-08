@@ -251,6 +251,22 @@ visualisation_transform = Compose(
     ]
 )
 
+def create_save_transform(pixdim):
+    save_transform = Compose(
+        [
+            LoadImaged(keys=["t1_image", "t2_image", "label"]), #[217, 290, 290]
+            ConvertToMultiChannelBasedOnDHCPClassesd(keys="label"), #(10, 217, 290, 290)
+            AddChanneld(keys=["t1_image", "t2_image"]), #(2, 217, 290, 290)
+            Spacingd(keys=["t1_image", "t2_image", "label"], pixdim=pixdim, mode=("bilinear", "bilinear", "nearest")),
+            NormalizeIntensityd(keys=["t1_image", "t2_image"], nonzero=True, channel_wise=True),
+            ConcatItemsd(keys=["t1_image", "t2_image"], name="image"),
+            DeleteItemsd(keys=["t1_image", "t2_image"]),
+            EnsureTyped(keys=["image", "label"]),
+        ]
+    )
+
+    return save_transform
+
 def create_train_val_transform(pixdim, roi_size, hide_labels, slicing_mode = None, selection_mode = None):
 
     if hide_labels:
