@@ -18,7 +18,7 @@ inferencelogger = InferenceLogger('baseline', model_path=model_path, session_inf
 set_determinism(seed=inferencelogger.hyperparams['random_seed'])
 
 # Create (train and) test loaders
-testcollector = TestCollector(inferencelogger.root_dir, inferencelogger.result_dir)
+testcollector = TestCollector(inferencelogger.mode, inferencelogger.root_dir, inferencelogger.result_dir)
 pixdim = inferencelogger.hyperparams['pixdim']
 roi_size = inferencelogger.hyperparams['roi_size']
 batch_size = inferencelogger.hyperparams['batch_size']
