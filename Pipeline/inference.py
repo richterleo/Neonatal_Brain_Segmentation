@@ -75,6 +75,9 @@ with torch.no_grad():
     dice_metric.reset()
     dice_metric_batch.reset()
 
+inferencelogger.stop_clock()
+inferencelogger.save_info()
+
 
 
 

@@ -22,4 +22,7 @@ slicing_modes = ['random', 'axial', 'sagittal', 'coronal']
 
 selection_modes = ['random', 'equidistant']
 
+colors = ["blue", "brown", "purple", "yellow", "red", "magenta", "indigo", "cornflowerblue",
+            "salmon", "peru"]
+
 

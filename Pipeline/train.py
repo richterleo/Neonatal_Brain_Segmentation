@@ -226,7 +226,7 @@ for epoch in range(resultlogger.hyperparams['max_epochs']):
                 )
                 print("saved new best metric model")
             
-            resultlogger.results["best_mean_dict"].append(best_metric)
+            resultlogger.results["best_mean_dice"].append(best_metric)
             resultlogger.results["best_epoch"].append(best_metric_epoch-1)
             print(f"current epoch: {epoch + 1} current mean dice: {metric:.4f}")
 
