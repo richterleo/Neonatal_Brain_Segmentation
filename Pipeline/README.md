@@ -70,4 +70,6 @@ To evaluate a model on the test set, please provide the model path to the Infere
 model_path = Path('Path/to/model')
 inferencelogger = InferenceLogger('baseline', model_path, session_info='Test inference')
 ```
-and execute Inference.py. Results will be saved in a newly created results directory (see also [Run Pipeline](runpipeline)). 
+and execute `Inference.py`. Results will be saved in a newly created results directory (see also [Run Pipeline](runpipeline)). 
+
+Please also provide the InferenceLogger with the model training mode (i.e. `baseline`, `agePrediction`, `labelBudgeting` or `transfer`). If `transfer` is selected, the inference will be performed on the smaller testset of preterm infants. 
