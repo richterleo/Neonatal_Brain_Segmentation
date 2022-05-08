@@ -42,11 +42,15 @@ Raw data must be stored in './Pipeline/dHCP_raw'. Please make sure the file 'par
 
 ## Run Pipeline
 
-The main training loop is contained in `Train.py`. Hyperparameters can be changed manually in `Hyperparams.py`. Epoch-wise loss and validation Dice Scores (per tissue class and on average), among other metrics, as well as the current best model and training graphs will be saved to a newly created result folder under '.Pipeline/results'. 
+The main training loop is contained in `Train.py`. Hyperparameters can be changed manually in `Hyperparams.py`. Epoch-wise loss and validation Dice Scores (per tissue class and on average), among other metrics, as well as the current best model and training graphs will be saved to a newly created result folder under '.Pipeline/results'.
 
 ## Age Prediction
 
-Additional age prediction can be performed by specifying the `mode` attribute of the ResultsLogger in `Train.py` as `agePrediction` and then executing the training pipeline. 
+Additional age prediction can be performed by specifying the `mode` attribute of the ResultsLogger in `Train.py` as `agePrediction`, i.e.
+
+  resultlogger = ResultsLogger('baseline', session_info='Only for testing')
+  
+and then executing the training pipeline. 
 
 ## Label Budgeting
 
