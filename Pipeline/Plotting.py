@@ -6,7 +6,11 @@ class resultPlotter:
     '''Class for plotting training results
     
     Attributes:
+<<<<<<< HEAD
         results (dict[str, list]): training results (loss, dice)
+=======
+        results (dict[str, list]): training results (loss, dice)\
+>>>>>>> d0c887d6b67d318c70a21047f38242c3a59b36ab
         result_dir (pathlib.Path): path to result directory, newly created for each run
         mode (str): training mode
     
