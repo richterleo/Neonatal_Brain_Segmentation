@@ -194,7 +194,6 @@ class Collector(ABC):
     def get_loaders(self):
         pass
 
-    @abstractmethod
     def create_train_val_test_ids(self, mode):
         '''Creates fixed and random train, val, test indices and saves them down.'''
 

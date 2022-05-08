@@ -176,6 +176,7 @@ class ResultsLogger(Logger):
 
 
 class InferenceLogger(Logger):
+    '''Class for logging inference params and results'''
 
     def __init__(self, mode, model_path=None, transfer_strategy = None, 
                 model_size='big', session_info='', monai_data_dir='Pipeline', random_seed = 0):
