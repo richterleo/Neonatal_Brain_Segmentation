@@ -18,6 +18,7 @@ This repository consists of 4 building blocks:
 * [Age Prediction](#ageprediction)
 * [Label Budgeting](#labelbudgeting)
 * [Transfer Learning](#transferlearning)
+* [Inference](#inference)
 
 ## Technologies
 
@@ -49,7 +50,7 @@ The main training loop is contained in `Train.py`. Hyperparameters can be change
 Additional age prediction can be performed by specifying the `mode` attribute of the ResultsLogger in `Train.py` as `agePrediction`, i.e.
 
 ```
-resultlogger = ResultsLogger('baseline', session_info='Only for testing')
+resultlogger = ResultsLogger('agePrediction', session_info='Test age prediction')
 ```  
 and then executing the training pipeline. 
 
@@ -58,3 +59,15 @@ and then executing the training pipeline.
 To train a model on partially annotated MRI scans, set the `mode` of the ResultsLogger in `Train.py` to `labelBudgeting`. By default, 30% of the slices of each scan will be annotated and the number of samples will be tripled. 
 
 ## Transfer Learning
+
+You can train a model on a subset of older neonates by setting the `mode` of the ResultsLogger in `Train.py` to `transfer`. No metrics will be recorded. 
+
+## Inference
+
+To evaluate a model on the test set, please provide the model path to the InferenceLogger in `Inference.py`:
+
+```
+model_path = Path('Path/to/model')
+inferencelogger = InferenceLogger('baseline', model_path, session_info='Test inference')
+```
+and execute Inference.py. Results will be saved in a newly created results directory (see also [Run Pipeline](runpipeline)). 
