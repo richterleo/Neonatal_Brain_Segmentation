@@ -5,7 +5,6 @@ import tempfile
 import typing
 
 from BaseTypes import NpDecoder, Collector
-from copy import deepcopy
 from Hyperparams import label_dispersion_factor
 from pathlib import Path
 from monai.data import DataLoader, Dataset, CacheNTransDataset
@@ -15,7 +14,7 @@ from Transforms import create_train_val_transform, create_test_transform
 class TrainCollector(Collector):
     '''Class for loading data and creating train/val/test and young/old split.
 
-    Args:
+    Attributes:
         root_dir (Union[str, pathlib.Path]): root directory
         db_path (pathlib.Path): path to database
         result_dir (pathlib.Path): path to results folder
@@ -29,6 +28,8 @@ class TrainCollector(Collector):
         meta_data_list (List): list of paths to meta_data
         meta_data_list_dicts (List): list of meta data dicts
         data_dict (List): list of dicts containing T1w, T2w, label and meta data per sample
+        mode (str): one of four possible modes ('baseline', 'agePrediction', 'labelBudgeting', 'transfer)
+        cache_dir (Path): path to cache_dir, if needed for labelhiding
         val_test_split (float): proportion of images in train set. rest of samples is equally distributed over val and test set
     '''
     def __init__(self, root_dir, result_dir, mode, val_test_split=0.8, db='dHCP'):
@@ -112,6 +113,18 @@ class TrainCollector(Collector):
             wr.writerow(test_ids)
 
     def get_loaders(self, pixdim, roi_size, batch_size, slicing_mode = None, selection_mode=None):
+        '''Creates train_loader and val_loader (if not mode == transfer)
+        
+        Args:
+            pixdim (List): voxel dimensions
+            roi_size (List): size of image region
+            batch_size (int): batch_size for dataloader
+            slicing_mode (str): one of 4 slicing modes ('axial', 'coronal', 'sagittal', random'), if mode == labelBudgeting
+            selection_mode (str): one of two selection modes ('random', 'equidistant')
+        
+        Returns:
+            dataloader(s)
+        '''
         if self.mode == 'transfer':
             train_dict = self.create_old()
 
@@ -123,6 +136,8 @@ class TrainCollector(Collector):
         
         elif self.mode == 'labelBudgeting':
             train_dict, val_dict = self.create_sets()
+            # create cache_dir to save transformed samples
+            Path(self.cache_dir).mkdir(parents=True, exist_ok=True)
 
             train_transform, val_transform = create_train_val_transform(pixdim, roi_size, True, 
                                             slicing_mode=slicing_mode, selection_mode=selection_mode) # inserts label hide transform
@@ -198,9 +213,29 @@ class TrainCollector(Collector):
 
 
 class TestCollector(Collector):
+    '''Class for loading data for inference purposes.
 
-    def __init__(self, root_dir, result_dir, db='dHCP'):
+    Attributes:
+        root_dir (Union[str, pathlib.Path]): root directory
+        db_path (pathlib.Path): path to database
+        result_dir (pathlib.Path): path to results folder
+        t1_dir (pathlib.Path): path to T1w images in database
+        t2_dir (pathlib.Path): path to T2w images in database
+        label_dir (pathlib.Path): path to labels in database
+        cache_dir (pathlib.Path): path to cache folder for hiding labels
+        t1_list (List): list of paths to T1w images
+        t2_list (List): list of paths to T2w images
+        label_list (List): list of paths to labels
+        meta_data_list (List): list of paths to meta_data
+        meta_data_list_dicts (List): list of meta data dicts
+        data_dict (List): list of dicts containing T1w, T2w, label and meta data per sample
+        mode (str): one of four possible modes ('baseline', 'agePrediction', 'labelBudgeting', 'transfer)
+        cache_dir (Path): path to cache_dir, if needed for labelhiding
+        val_test_split (float): proportion of images in train set. rest of samples is equally distributed over val and test set
+    '''
+    def __init__(self, mode, root_dir, result_dir, db='dHCP'):
         super().__init__(root_dir, result_dir, db)
+        self.mode = mode
 
     def create_sets(self):
         '''Creates test set from presaved subject ids.
@@ -259,7 +294,16 @@ class TestCollector(Collector):
 
 
     def get_loaders(self, pixdim, roi_size, batch_size):
+        '''Creates train_loader and val_loader (if not mode == transfer)
         
+        Args:
+            pixdim (List): voxel dimensions
+            roi_size (List): size of image region
+            batch_size (int): batch_size for dataloader
+        
+        Returns:
+            dataloader(s)
+        '''
         if self.mode == 'transfer':
             train_dict, test_dict = self.create_young()
 
@@ -291,5 +335,5 @@ if __name__ == '__main__':
 
     result_dir = Path(root_dir) / r'results/baseline_results1647892348'
 
-    datacollector = TrainCollector(root_dir, result_dir, False)
+    datacollector = TrainCollector(root_dir, result_dir, 'baseline')
     print(datacollector.data_dict)

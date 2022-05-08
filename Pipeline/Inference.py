@@ -12,6 +12,7 @@ from Utils import set_parameter_requires_grad
 from Transforms import post_trans
 from Train import run
 
+# Choose model to evaluate
 model_path = Path('results/Age_Segmentation_Dynunet_results1631399790/best_metric_model_epoch_57.pth')
 inferencelogger = InferenceLogger('baseline', model_path=model_path, session_info='Only for testing') # if transfer, define strategy
 
@@ -29,7 +30,7 @@ else:
     test_loader = inferencelogger.get_loaders(pixdim, roi_size, batch_size)
 
 
-# Load model that we want to evaluate
+# Load model 
 device = torch.device("cuda:0")
 model = inferencelogger.define_model(inferencelogger.hyperparams['kernels'], 
                             inferencelogger.hyperparams['strides']).to(device)
@@ -57,7 +58,7 @@ if inferencelogger.mode == 'transfer':
     loss_function = DiceCELoss(to_onehot_y=False, sigmoid = True, squared_pred=True) 
     optimizer = torch.optim.SGD(
         params_to_update, #only train params for which requires_grad is True
-        lr=transfer_strategies_lrs[inferencelogger.transfer_strategy],
+        lr=transfer_strategies_lrs[inferencelogger.transfer_strategy], # smaller learning rate for fine_tuning 
         momentum=0.99,
         weight_decay=3e-5,
         nesterov=True,
@@ -65,9 +66,11 @@ if inferencelogger.mode == 'transfer':
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, 
                 lr_lambda=lambda epoch: (1 - epoch / inferencelogger.hyperparams['max_epochs']) ** 0.9)
 
+    # fine tune model
     if inferencelogger.transfer_strategy not in ['no_finetuning', 'new_model']:
         run(inferencelogger, model, train_loader, device, optimizer, scheduler, dice_metric, dice_metric_batch, loss_function=loss_function)
 
+    # train new model from scratch
     elif inferencelogger.transfer_strategy == 'new_model':
         run(inferencelogger, model, train_loader, device, optimizer, scheduler, dice_metric, dice_metric_batch, loss_function=loss_function)
 
