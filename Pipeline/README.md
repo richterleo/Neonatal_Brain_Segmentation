@@ -42,8 +42,14 @@ Raw data must be stored in './Pipeline/dHCP_raw'. Please make sure the file 'par
 
 ## Run Pipeline
 
+The main training loop is contained in `Train.py`. Hyperparameters can be changed manually in `Hyperparams.py`. Epoch-wise loss and validation Dice Scores (per tissue class and on average), among other metrics, as well as the current best model and training graphs will be saved to a newly created result folder under '.Pipeline/results'. 
+
 ## Age Prediction
 
+Additional age prediction can be performed by specifying the `mode` attribute of the ResultsLogger in `Train.py` as `agePrediction` and then executing the training pipeline. 
+
 ## Label Budgeting
+
+To train a model on partially annotated MRI scans, set the `mode` of the ResultsLogger in `Train.py` to `labelBudgeting`. By default, 30% of the slices of each scan will be annotated and the number of samples will be tripled. 
 
 ## Transfer Learning
