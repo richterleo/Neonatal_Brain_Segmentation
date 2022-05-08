@@ -48,8 +48,9 @@ The main training loop is contained in `Train.py`. Hyperparameters can be change
 
 Additional age prediction can be performed by specifying the `mode` attribute of the ResultsLogger in `Train.py` as `agePrediction`, i.e.
 
-  resultlogger = ResultsLogger('baseline', session_info='Only for testing')
-  
+```
+resultlogger = ResultsLogger('baseline', session_info='Only for testing')
+```  
 and then executing the training pipeline. 
 
 ## Label Budgeting
