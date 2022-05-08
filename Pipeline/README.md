@@ -3,9 +3,16 @@
 
 Pipeline for segmenting neonatal brain MRI, developed for T1w and T2w data from the structural pipeline of the [Third Release](https://biomedia.github.io/dHCP-release-notes/) of the [Developing Human Connectome Project](http://www.developingconnectome.org/project/). 
 
+This repository consists of 4 building blocks: 
+
+* a deep-learning-based segmentation pipeline 
+* a segmentation pipeline with added age prediction 
+* experiments with label budgeting (i.e.: What is the most efficient way of dealing with scarce labeled MRI data?)
+* experiments with transfer learning (i.e.: Can we adapt models pre-trained on older infants to the task of segmenting younger infants?)
+
 ## Running the Pipeline
 
-Before the pipeline can be executed, please copy the data into the folder 'dHCP_raw'. The folder structure inside 'dHCP_raw' must look like this:
+Before the pipeline can be executed, please 
 
 
 
