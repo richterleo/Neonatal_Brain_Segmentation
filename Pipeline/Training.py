@@ -2,13 +2,11 @@ import torch
 
 from DataHandler import TrainCollector
 from Logging import ResultsLogger
-from monai.data import DataLoader, Dataset, decollate_batch, CacheNTransDataset
 from monai.losses import DiceCELoss
 from monai.metrics import DiceMetric
 from monai.utils import set_determinism
 from Plotting import ResultPlotter
 from Train import run
-from Transforms import create_train_val_transform
 
 
 # Creates new directories for saving down results
@@ -24,20 +22,16 @@ datacollector = TrainCollector(resultlogger.root_dir, resultlogger.result_dir, r
 # Create transforms
 pixdim = resultlogger.hyperparams['pixdim']
 roi_size = resultlogger.hyperparams['roi_size']
-train_transform, val_transform = create_train_val_transform(pixdim, roi_size)
+batch_size = resultlogger.hyperparams['batch_size']
 
-# Create train and val data dicts
-train_dict, val_dict = datacollector.create_sets()
-
-#train_ds_hide_labels = CacheNTransDataset(train_dict, transform=train_transform, cache_n_trans=0, cache_dir = cache_dir)
-train_ds = Dataset(train_dict, transform=train_transform)
-val_ds = Dataset(val_dict, transform=train_transform)
-
-train_loader = DataLoader(train_ds, batch_size=resultlogger.hyperparams['batch_size'], shuffle=True)
-val_loader = DataLoader(val_ds, batch_size=resultlogger.hyperparams['batch_size'], shuffle=True)
-
-resultlogger.update_hyperparams(size_training_set = len(train_ds), size_val_set = len(val_ds))
-print(f"We have {len(train_ds)} training images and {len(val_ds)} val images")
+if resultlogger.mode == 'transfer':
+    train_loader = datacollector.get_loaders(pixdim, roi_size, batch_size) # no validation set for pretraining on older population
+elif resultlogger.mode == 'labelBudgeting':
+    slicing_mode = resultlogger.hyperparams['slicing_mode']
+    selection_mode = resultlogger.hyperparams['selection_mode']
+    train_loader, val_loader = datacollector.get_loaders(pixdim, roi_size, batch_size, slicing_mode=slicing_mode, selection_mode=selection_mode)
+else:
+    train_loader, val_loader = datacollector.get_loaders(pixdim, roi_size, batch_size)
 
 # Create nnU-Net model instance with best hyperparams 
 device = torch.device("cuda:0")
@@ -70,7 +64,7 @@ else:
     run(resultlogger, model, train_loader, device, optimizer, scheduler, dice_metric, dice_metric_batch, val_loader=val_loader,
         loss_function=loss_function)
 
-
+# Save down training metrics
 resultlogger.stop_clock()
 resultlogger.save_info()
 

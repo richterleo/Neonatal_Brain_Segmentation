@@ -34,34 +34,36 @@ def run(logger, model, train_loader, device, optimizer, scheduler, dice_metric, 
         for batch_data in train_loader:
             step += 1
             
-            if logger.hyperparams['hide_labels']:
-                inputs, labels, slice_matrix, location = (
+            if logger.mode == 'labelBudgeting':
+                inputs, labels, meta_data, label_slice_matrix, location = (
                     batch_data["image"].to(device),
                     batch_data["label"].to(device),
+                    batch_data["meta_data"],
                     batch_data["label_slice_matrix"].to(device), 
-                    batch_data["label_meta_dict"]["location"].to(device)
+                    batch_data["label_slice_dict"]["location"].to(device)
                 )
                 optimizer.zero_grad()
-                outputs = model(inputs)
+                outputs = model(inputs) #shape of outputs is [B, 4, 10, 96, 96, 96]
 
-                selected_slices = get_slices_from_matrix(slice_matrix, location)
-                selected_slices = selected_slices.to(device)
-                
-                if location[0] == 0:
-                    print("sagittal")
-                    outputs = outputs[:,:,selected_slices,:,:]
-                    labels = labels[:,:,selected_slices,:,:]
+                image_id = meta_data["id"]
+                subj_age = meta_data["scan_age"]
+                subj_age = subj_age.tolist()
 
-                elif location[0] == 1:
-                    print("coronal")
-                    outputs = outputs[:,:,:,selected_slices,:]
-                    labels = labels[:,:,:,selected_slices,:]
+                # aux function returns sliced outputs and labels with compatible shapes. 
+                # outputs and labels are lists with len batch_size 
+                # cannot be stacked because of non-matching dimensions (esp. if slicing_mode = "random", slicing axis is then randomly chosen)
+                outputs, labels = get_slices_from_matrix(label_slice_matrix, location, outputs, labels)
 
-                elif location[0] == 2:
-                    print("axial")
-                    outputs = outputs[:,:,selected_slices,:,:]
-                    labels = labels[:,:,selected_slices,:,:]
-            
+                # in this case we sum the loss 
+                loss = 0
+
+                for output, label in zip(outputs, labels):
+                    output = torch.unbind(output, dim=0) #this is now a tuple
+
+                    loss += sum(
+                    0.5 ** i * loss_function(outp.unsqueeze(0), label.unsqueeze(0)) #need to unsqueeze since loss function expects [B, H, W, D]
+                    for i, outp in enumerate(output)
+                    )
             else:
 
                 inputs, labels, meta_data = (
@@ -75,30 +77,30 @@ def run(logger, model, train_loader, device, optimizer, scheduler, dice_metric, 
                 else:
                     outputs = model(inputs)
 
-            image_id = meta_data["id"]
-            subj_age = meta_data["scan_age"]
-            subj_age = subj_age.tolist()
+                image_id = meta_data["id"]
+                subj_age = meta_data["scan_age"]
+                subj_age = subj_age.tolist()
 
-            # deep supervision makes output tuple
-            outputs = torch.unbind(outputs, dim=1) 
+                # deep supervision makes output tuple
+                outputs = torch.unbind(outputs, dim=1) 
 
-            # if mode == agePrediction, compute age loss
-            if logger.mode == 'agePrediction':
-                age = torch.Tensor(subj_age).to(device)
-                age_pred = age_pred.T[0]
-                age_loss = age_loss_function(age_pred, age)
+                # if mode == agePrediction, compute age loss
+                if logger.mode == 'agePrediction':
+                    age = torch.Tensor(subj_age).to(device)
+                    age_pred = age_pred.T[0]
+                    age_loss = age_loss_function(age_pred, age)
 
-                # compute deep supervision loss 
-                seg_loss = sum(0.5 ** i * seg_loss_function(output, labels)
-                        for i, output in enumerate(outputs))
+                    # compute deep supervision loss 
+                    seg_loss = sum(0.5 ** i * seg_loss_function(output, labels)
+                            for i, output in enumerate(outputs))
 
-                # combine both losses
-                loss = seg_loss + logger.hyperparams['age_loss_weight'] * age_loss
+                    # combine both losses
+                    loss = seg_loss + logger.hyperparams['age_loss_weight'] * age_loss
             
-            else:
-                # compute deep supervision loss 
-                loss = sum(0.5 ** i * loss_function(output, labels)
-                        for i, output in enumerate(outputs))
+                else:
+                    # compute deep supervision loss 
+                    loss = sum(0.5 ** i * loss_function(output, labels)
+                            for i, output in enumerate(outputs))
 
             loss.backward()
             optimizer.step()
@@ -170,10 +172,11 @@ def run(logger, model, train_loader, device, optimizer, scheduler, dice_metric, 
                         torch.save(
                             model.state_dict(),
                             os.path.join(logger.result_dir, "best_metric_model_epoch_" + str(epoch) + ".pth"),
-                        )
-                        print("saved new best metric model")
-                    
-                    logger.results["best_mean_dice"].append(best_metric)
-                    logger.results["best_epoch"].append(best_metric_epoch-1)
+                            )
 
+                        logger.results['best_mean_dice'].append(best_metric)
+                        logger.results["best_epoch"].append(best_metric_epoch-1)
 
+    # if we don't have a validation set, just save the model after training
+    if not val_loader:
+        torch.save(model.state_dict(), os.path.join(logger.result_dir, "best_metric_model_epoch_" + str(epoch) + ".pth"),)

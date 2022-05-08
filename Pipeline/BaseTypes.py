@@ -31,6 +31,7 @@ class MissingModeError(Exception):
     '''Raised when slicing_mode or selection_mode is missing
 
     Attributes:
+
         message (str): error message
     '''
 
@@ -187,6 +188,10 @@ class Collector(ABC):
 
     @abstractmethod
     def create_sets(self):
+        pass
+
+    @abstractmethod
+    def get_loaders(self):
         pass
 
     @abstractmethod

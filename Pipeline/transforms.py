@@ -251,8 +251,53 @@ visualisation_transform = Compose(
     ]
 )
 
-def create_train_val_transform(pixdim, roi_size):
-    train_transform= Compose(
+def create_train_val_transform(pixdim, roi_size, hide_labels, slicing_mode = None, selection_mode = None):
+
+    if hide_labels:
+        train_transform= Compose(
+            [
+            LoadImaged(keys=["t1_image", "t2_image", "label"]), #[217, 290, 290]
+            ConvertToMultiChannelBasedOnDHCPClassesd(keys="label"), #(10, 217, 290, 290)
+            AddChanneld(keys=["t1_image", "t2_image"]), #(2, 217, 290, 290)
+            Spacingd(keys=["t1_image", "t2_image", "label"], pixdim=pixdim, mode=("bilinear", "bilinear", "nearest")),
+            HideLabelsd(keys="label", slicing_mode = slicing_mode, selection_mode = selection_mode), # define slicing_mode and selection_mode
+            CropForegroundd(keys=["t1_image", "t2_image", "label", "label_slice_matrix"], source_key="t2_image", select_fn=lambda x: x>1, margin=0),
+            ConcatItemsd(keys=["t1_image", "t2_image"], name="image"),
+            DeleteItemsd(keys=["t1_image", "t2_image"]),
+            RandSpatialCropd(
+                keys=["image", "label", "label_slice_matrix"], roi_size=roi_size, random_size=False, random_center=True
+            ), # [192, 192, 192]
+            RandFlipd(keys=["image", "label", "label_slice_matrix"], prob=0.1, spatial_axis=0),
+            RandFlipd(keys=["image", "label", "label_slice_matrix"], prob=0.1, spatial_axis=1),
+            RandFlipd(keys=["image", "label", "label_slice_matrix"], prob=0.1, spatial_axis=2),
+            Rand3DElasticd(
+                keys=["image", "label", "label_slice_matrix"],
+                mode=("bilinear", "nearest", "nearest"),
+                prob=0.24,
+                sigma_range=(5, 8),
+                magnitude_range=(40, 80),
+                translate_range=(20, 20, 20),
+                rotate_range=(np.pi / 36, np.pi / 36, np.pi),
+                scale_range=(0.15, 0.15, 0.15),
+                padding_mode="reflection",
+            ),
+            NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
+            RandGaussianNoised(keys=["image"], std=0.01, prob=0.13),
+            RandGaussianSmoothd(
+                keys=["image"],
+                sigma_x=(0.5, 1.15),
+                sigma_y=(0.5, 1.15),
+                sigma_z=(0.5, 1.15),
+                prob=0.13,
+            ),
+            RandScaleIntensityd(keys="image", factors=0.1, prob=0.24),
+            RandShiftIntensityd(keys="image", offsets=0.1, prob=0.24),
+            EnsureTyped(keys=["image", "label"]),
+        ]
+        )
+
+    else:
+        train_transform= Compose(
         [
             LoadImaged(keys=["t1_image", "t2_image", "label"]), #[217, 290, 290]
             ConvertToMultiChannelBasedOnDHCPClassesd(keys="label"), #(10, 217, 290, 290)
@@ -292,7 +337,7 @@ def create_train_val_transform(pixdim, roi_size):
             RandShiftIntensityd(keys="image", offsets=0.1, prob=0.24),
             EnsureTyped(keys=["image", "label"]),
         ]
-    )
+        )
 
 
     val_transform = Compose(

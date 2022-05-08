@@ -8,7 +8,8 @@ from BaseTypes import NpDecoder, Collector
 from copy import deepcopy
 from Hyperparams import label_dispersion_factor
 from pathlib import Path
-from monai.data import DataLoader, Dataset
+from monai.data import DataLoader, Dataset, CacheNTransDataset
+from monai.data.utils import pad_list_data_collate
 from Transforms import create_train_val_transform, create_test_transform
 
 class TrainCollector(Collector):
@@ -109,6 +110,41 @@ class TrainCollector(Collector):
         with open(test_path,'w') as test_file:
             wr = csv.writer(test_file, dialect='excel')
             wr.writerow(test_ids)
+
+    def get_loaders(self, pixdim, roi_size, batch_size, slicing_mode = None, selection_mode=None):
+        if self.mode == 'transfer':
+            train_dict = self.create_old()
+
+            train_transform, _ = create_train_val_transform(pixdim, roi_size, False)
+            train_ds = Dataset(train_dict, transform=train_transform)
+            train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+
+            return train_loader
+        
+        elif self.mode == 'labelBudgeting':
+            train_dict, val_dict = self.create_sets()
+
+            train_transform, val_transform = create_train_val_transform(pixdim, roi_size, True, 
+                                            slicing_mode=slicing_mode, selection_mode=selection_mode) # inserts label hide transform
+            train_ds = CacheNTransDataset(train_dict, transform=train_transform, cache_n_trans=5, cache_dir=self.cache_dir)
+            val_ds = Dataset(val_dict, transform=val_transform)
+
+            train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, collate_fn=pad_list_data_collate)
+            val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=True, collate_fn=pad_list_data_collate)
+
+            return train_loader, val_loader
+        
+        else:
+            train_dict, val_dict = self.create_sets()
+
+            train_transform, val_transform = create_train_val_transform(pixdim, roi_size, False)            
+            train_ds = Dataset(train_dict, transform=train_transform)
+            train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+
+            val_ds = Dataset(val_dict, transform=val_transform)
+            val_loader = DataLoader(val_ds, batch_Size=batch_size, shuffle=True)
+
+            return train_loader, val_loader
 
     def create_old(self):
         '''Creates dataset made up of old subjects for transfer learning.
@@ -227,7 +263,7 @@ class TestCollector(Collector):
         if self.mode == 'transfer':
             train_dict, test_dict = self.create_young()
 
-            train_transform, _ = create_train_val_transform(pixdim, roi_size)
+            train_transform, _ = create_train_val_transform(pixdim, roi_size, False) # no labelBudgeting
             test_transform = create_test_transform(pixdim)
             train_ds = Dataset(train_dict, transform=train_transform)
             test_ds = Dataset(test_dict, transform=test_transform)
