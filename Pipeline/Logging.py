@@ -37,7 +37,7 @@ class ResultsLogger(Logger):
             random_seed (int): random seed for training
         
         '''
-        super().__init__(mode, session_info='', monai_data_dir='Pipeline', random_seed = 0)
+        super().__init__(mode, session_info=session_info, monai_data_dir=monai_data_dir, random_seed = random_seed)
         self.result_dir = self.root_dir / 'results' / f"{mode}_results{str(round(self.start))}"
         self.meta_info["result_dir"] = self.result_dir
         self.hyperparams = self.populate_hyperparams()
@@ -114,11 +114,11 @@ class ResultsLogger(Logger):
         
         self.results_dict['mean_dice'].append(metric)
 
-        for i, cat in enumerate(ResultsLogger.categories):
+        for i, cat in enumerate(categories):
             tc_metric = metric_batch[i].item()
             self.results[cat].append(tc_metric)
 
-        self.results['mean_dice_imp'] = np.mean([self.results[tc] for tc in tissue_classes])
+        self.results['mean_dice_imp'].append(np.mean([self.results[tc] for tc in tissue_classes]))
 
     
     def log_analysis(self, loss, image_id, subj_age, step, epoch):
@@ -132,6 +132,7 @@ class ResultsLogger(Logger):
 
     def log_age_analysis(self, loss, seg_loss, age_loss, image_id, subj_age, step, epoch):
         '''Logs scores for error analysis with added age prediction'''
+        
         self.log_analysis(loss, image_id, subj_age, step, epoch)
         try:
             self.analysis['seg_loss'].append(seg_loss.item())
@@ -180,7 +181,7 @@ class InferenceLogger(Logger):
             random_seed (int): random seed for training
         
         '''
-        super().__init__(mode, session_info='', monai_data_dir='Pipeline', random_seed = 0)
+        super().__init__(mode, session_info=session_info, monai_data_dir=monai_data_dir, random_seed = random_seed)
         self.result_dir = self.root_dir / 'results' / f"Evaluate_{mode}_results{str(round(self.start))}"
         self.meta_info["result_dir"] = self.result_dir
         self.hyperparams = self.populate_hyperparams(model_size)
@@ -191,13 +192,12 @@ class InferenceLogger(Logger):
         '''Create dict to save down metrics during training.'''
         
         tissue_dict = {cat: [] for cat in categories}
-        sum_dict = {stat: [] for stat in ["epoch_loss", "mean_dice", "mean_dice_imp", 
-                    "best_mean_dice", "best_epoch"]}
+        sum_dict = {stat: [] for stat in ["mean_dice", "mean_dice_imp"]}
         time_dict = {"training_time": None}
 
         if self.mode == 'agePrediction':
-            sum_dict["age_epoch_loss"] = []
-            sum_dict["seg_epoch_loss"] = []
+            sum_dict["mse_metric"] = []
+            sum_dict["mae_metric"] = []
 
         return tissue_dict | sum_dict | time_dict
     
@@ -247,6 +247,23 @@ class InferenceLogger(Logger):
                     overlap=0.5,)
 
         return _compute(input)
+
+    def log_tcs(self, metric, metric_batch):
+        '''Logs dice scores for each category during training.'''
+        
+        self.results_dict['mean_dice'].append(metric.item())
+
+        for i, cat in enumerate(categories):
+            tc_metric = metric_batch[i].item()
+            self.results[cat].append(tc_metric)
+
+        self.results['mean_dice_imp'].append(np.mean([self.results[tc] for tc in tissue_classes]))
+
+    def log_age_metrics(self, mse_metric, mae_metric):
+
+        self.results['mse_metric'].append(mse_metric.item())
+        self.results['mae_metric'].append(mae_metric.item())
+
 
 
 

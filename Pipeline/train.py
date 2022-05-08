@@ -1,38 +1,16 @@
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-import numpy as np
 import os
-import pandas as pd
-import random
-import tempfile
-import time
 import torch
 
-from datetime import datetime
 from DataHandler import TrainCollector
 from Logging import ResultsLogger
-from monai.transforms.inverse import InvertibleTransform
-from monai.apps import DecathlonDataset, download_and_extract, extractall
-from monai.config import print_config, DtypeLike, KeysCollection
 from monai.data import DataLoader, Dataset, decollate_batch, CacheNTransDataset
 from monai.losses import DiceLoss, DiceCELoss
 from monai.metrics import DiceMetric
-from monai.networks.nets import UNet, DynUNet   
-from monai.transforms.transform import Transform
-from monai.transforms import (
-    Activations,
-    AsDiscrete,
-    Compose,
-    EnsureType)
 from monai.utils import set_determinism
-from monai.utils.misc import ensure_tuple_rep
-from monai.networks.layers.factories import Act, Norm
-from pathlib import Path
 from Plotting import ResultPlotter
-from torchvision import transforms
 from Transforms import create_train_val_transform, post_trans
 from typing import Callable, List, Mapping, Optional, Sequence, Tuple, Union
-from Utils import create_indices, get_kernels_strides, get_slices_from_matrix
+from Utils import get_slices_from_matrix
 
 
 # Creates new directories for saving down results

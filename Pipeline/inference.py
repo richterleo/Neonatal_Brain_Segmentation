@@ -44,18 +44,6 @@ if inferencelogger.mode == 'agePrediction':
 # evaluate model
 model.eval()
 
-metric_values = []
-metric_values_BG = []
-metric_values_CSF = []
-metric_values_cGM = []
-metric_values_WM = []
-metric_values_bg = []
-metric_values_Ventricles = []
-metric_values_Cerebellum = []
-metric_values_dGM = []
-metric_values_Brainstem = []
-metric_values_Hippocampus = []
-
 step = 0
 with torch.no_grad():
     for test_data in test_loader:
@@ -80,21 +68,9 @@ with torch.no_grad():
         step +=1
         print(f'step {step}')
 
-    results['metric'] = dice_metric.aggregate().item()
-    results['mse_metric'] = mse_metric.aggregate().item()
-    results['mae_metric'] = mae_metric.aggregate().item()
-
-    metric_batch = dice_metric_batch.aggregate()
-    results['metric_BG'] = metric_batch[0].item()
-    results['metric_CSF'] = metric_batch[1].item()
-    results['metric_cGM'] = metric_batch[2].item()
-    results['metric_WM'] = metric_batch[3].item()
-    results['metric_bg'] = metric_batch[4].item()
-    results['metric_Ventricles'] = metric_batch[5].item()
-    results['metric_Cerebellum'] = metric_batch[6].item()
-    results['metric_dGM'] = metric_batch[7].item()
-    results['metric_Brainstem'] = metric_batch[8].item()
-    results['metric_Hippocampus'] = metric_batch[9].item()
+    inferencelogger.log_tcs(dice_metric.aggregate(), dice_metric_batch.aggregate())
+    if inferencelogger.mode == 'agePrediction':
+        inferencelogger.log_age_tcs(mse_metric.aggregate(), mae_metric.aggregate())
 
     dice_metric.reset()
     dice_metric_batch.reset()
